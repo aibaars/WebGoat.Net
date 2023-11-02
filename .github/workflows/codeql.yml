@@ -45,6 +45,38 @@ jobs:
         # Learn more about CodeQL language support at https://aka.ms/codeql-docs/language-support
 
     steps:
+    - name: Write Lua script
+      run: | 
+        echo "function GetCompatibleVersions() return {'1.0.0'} end
+            function Exify(path)
+                if OperatingSystem == 'windows' then return path .. '.exe' else return path end
+            end
+            function RegisterExtraConfig()
+                return {
+                    ['csharp'] = {
+                        function(compilerName, compilerPath, compilerArguments, languageId)
+                            if MatchCompilerName('^' .. Exify('msbuild') .. '$', compilerName, compilerPath,
+                                compilerArguments) or
+                                MatchCompilerName('^' .. Exify('xbuild') .. '$', compilerName, compilerPath,
+                                    compilerArguments) then
+                                return {
+                                    order = ORDER_REPLACE,
+                                    invocation = BuildExtractorInvocation(languageId, compilerPath,
+                                        compilerPath,
+                                        compilerArguments,
+                                        nil, {
+                                        '/p:UseSharedCompilation=false',
+                                        '/p:MvcBuildViews=false',
+                                        '/p:EmitCompilerGeneratedFiles=true',
+                                    })
+
+                                }
+                            end
+                        end,
+                        table.unpack(_RegisteredMatchers['csharp'])
+                    }
+                }
+            end" > "${RUNNER_TEMP}/config.lua"
     - name: Checkout repository
       uses: actions/checkout@v3
 
@@ -59,6 +91,9 @@ jobs:
 
         # For more details on CodeQL's query packs, refer to: https://docs.github.com/en/code-security/code-scanning/automatically-scanning-your-code-for-vulnerabilities-and-errors/configuring-code-scanning#using-queries-in-ql-packs
         # queries: security-extended,security-and-quality
+      env:
+        CODEQL_ACTION_EXTRA_OPTIONS: '{"database":{"init":["--extra-tracing-config", "${{ runner.temp}}/config.lua"]}}'
+
 
     # Autobuild attempts to build any compiled languages (C/C++, C#, Go, Java, or Swift).
     # If this step fails, then you should remove it and run the build manually (see below)
